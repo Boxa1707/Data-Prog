@@ -1,0 +1,211 @@
+---
+title: "Fast Food Nutrition Analysis"
+author: "Slobodan Jovanic"
+format: html
+---
+
+## Introduction
+
+Fast food is widely consumed around the world, but it is often criticized for its nutritional content. In this project, we analyze a dataset containing nutrition facts from popular fast food chains. The main research questions are: Which food categories have the highest calorie content? How do sugar levels vary across different menu items? What is the relationship between different nutritional components? The goal is to explore calorie counts, sugar levels, and fat content across various menu items and chains to provide insights into fast food nutrition patterns.
+
+## Data Presentation
+
+```{r}
+library(tidyverse)
+
+# Load dataset
+menu <- read_csv("data/menu.csv")
+
+# Show first few rows
+head(menu)
+
+# Overview of structure
+glimpse(menu)
+
+# Summary statistics
+summary(menu)
+```
+
+**Data Description:**
+This dataset contains nutritional information for menu items from various fast food restaurants. The columns represent:
+
+- **Item**: Name of the menu item (text)
+- **Category**: Food category (e.g., Breakfast, Chicken & Fish, etc.)
+- **Calories**: Energy content in kilocalories (kcal)
+- **Total Fat**: Total fat content in grams (g)
+- **Saturated Fat**: Saturated fat content in grams (g)
+- **Trans Fat**: Trans fat content in grams (g)
+- **Cholesterol**: Cholesterol content in milligrams (mg)
+- **Sodium**: Sodium content in milligrams (mg)
+- **Carbohydrates**: Total carbohydrate content in grams (g)
+- **Fiber**: Dietary fiber content in grams (g)
+- **Sugars**: Sugar content in grams (g)
+- **Protein**: Protein content in grams (g)
+
+## Data Transformation
+
+### Table 1: High-Calorie Items Summary by Category
+This table shows categories with items over 500 calories, providing count and average values.
+
+```{r}
+high_calorie_summary <- menu %>%
+  filter(Calories > 500) %>%
+  group_by(Category) %>%
+  summarise(
+    item_count = n(),
+    avg_calories = round(mean(Calories, na.rm = TRUE), 1),
+    max_calories = max(Calories, na.rm = TRUE),
+    avg_total_fat = round(mean(`Total Fat`, na.rm = TRUE), 1)
+  ) %>%
+  arrange(desc(avg_calories))
+
+high_calorie_summary
+```
+
+This transformation filters items with more than 500 calories and groups them by category. It reveals which categories consistently offer high-calorie options and their nutritional characteristics.
+
+### Table 2: Nutritional Categories Classification
+This table classifies items into nutritional categories based on calorie and sugar content.
+
+```{r}
+nutritional_classification <- menu %>%
+  mutate(
+    calorie_level = case_when(
+      Calories < 300 ~ "Low",
+      Calories < 600 ~ "Medium", 
+      TRUE ~ "High"
+    ),
+    sugar_level = case_when(
+      Sugars < 10 ~ "Low Sugar",
+      Sugars < 30 ~ "Medium Sugar",
+      TRUE ~ "High Sugar"
+    )
+  ) %>%
+  group_by(calorie_level, sugar_level) %>%
+  summarise(
+    count = n(),
+    avg_calories = round(mean(Calories, na.rm = TRUE), 1),
+    avg_sugars = round(mean(Sugars, na.rm = TRUE), 1),
+    .groups = 'drop'
+  ) %>%
+  arrange(desc(count))
+
+nutritional_classification
+```
+
+This transformation creates new categorical variables for calorie and sugar levels, then summarizes the distribution of items across these categories. It helps identify patterns in how calorie and sugar content relate to each other.
+
+### Table 3: Category Comparison with Nutritional Ratios
+This table compares categories using derived nutritional ratios and rankings.
+
+```{r}
+category_comparison <- menu %>%
+  group_by(Category) %>%
+  summarise(
+    item_count = n(),
+    avg_calories = round(mean(Calories, na.rm = TRUE), 1),
+    avg_protein = round(mean(Protein, na.rm = TRUE), 1),
+    avg_sugars = round(mean(Sugars, na.rm = TRUE), 1),
+    protein_to_calorie_ratio = round(mean(Protein, na.rm = TRUE) / mean(Calories, na.rm = TRUE) * 100, 2),
+    .groups = 'drop'
+  ) %>%
+  mutate(
+    calorie_rank = rank(desc(avg_calories)),
+    protein_efficiency_rank = rank(desc(protein_to_calorie_ratio))
+  ) %>%
+  arrange(desc(avg_calories))
+
+category_comparison
+```
+
+This transformation calculates protein-to-calorie ratios and creates rankings to identify which categories offer the most protein per calorie, helping assess nutritional efficiency across categories.
+
+## Data Visualization
+
+### 1. Bar Plot of Average Calories per Category
+```{r}
+menu %>%
+  group_by(Category) %>%
+  summarise(avg_calories = mean(Calories, na.rm = TRUE)) %>%
+  ggplot(aes(x = reorder(Category, -avg_calories), y = avg_calories, fill = Category)) +
+  geom_col(show.legend = FALSE) +
+  labs(title = "Average Calories by Food Category",
+       x = "Category",
+       y = "Average Calories (kcal)") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+This bar chart shows the average calorie content across different food categories. Smoothies & Shakes and Chicken & Fish categories have the highest average calories, while Salads have the lowest. This visualization helps identify which categories to approach with caution for calorie-conscious consumers.
+
+### 2. Box Plot of Calories Distribution by Category
+```{r}
+menu %>%
+  ggplot(aes(x = Category, y = Calories, fill = Category)) +
+  geom_boxplot(show.legend = FALSE, alpha = 0.7) +
+  labs(title = "Distribution of Calories by Category",
+       x = "Category",
+       y = "Calories (kcal)") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+This box plot reveals the distribution and variability of calories within each category. It shows outliers and the range of calorie content, indicating that some categories like Chicken & Fish have high variability, while others like Salads are more consistent. The presence of outliers suggests some extremely high-calorie items in certain categories.
+
+### 3. Scatter Plot of Sugar vs. Calories Relationship
+```{r}
+menu %>%
+  ggplot(aes(x = Sugars, y = Calories, color = Category)) +
+  geom_point(alpha = 0.7, size = 2) +
+  geom_smooth(method = "lm", se = FALSE, color = "black", linetype = "dashed") +
+  labs(title = "Relationship between Sugar Content and Calories",
+       x = "Sugar Content (g)",
+       y = "Calories (kcal)",
+       color = "Category") +
+  theme_minimal()
+```
+
+This scatter plot explores the relationship between sugar content and total calories across all menu items. The trend line suggests a positive correlation between sugar and calories. Items from Smoothies & Shakes category tend to cluster in the high-sugar, high-calorie area, while most other items are concentrated in the lower sugar range.
+
+## Interpretation / Conclusion
+
+The analysis reveals several important insights about fast food nutrition:
+
+1. **Category Differences**: Smoothies & Shakes and Chicken & Fish categories have the highest average calorie content (over 400 kcal), while Salads are significantly lower (around 250 kcal). This suggests that beverage choices and protein-based items require more careful consideration for calorie management.
+
+2. **Sugar Distribution**: Sugar content varies dramatically, with some items containing over 80g of sugar (primarily beverages). Most food items contain relatively low sugar, but drinks can contribute significantly to daily sugar intake.
+
+3. **Nutritional Efficiency**: The protein-to-calorie ratio analysis shows that some categories like Chicken & Fish provide better protein value per calorie, making them potentially better choices for those seeking protein while managing calories.
+
+4. **Variability Within Categories**: The box plots reveal high variability within categories, indicating that even within "unhealthy" categories, there are better and worse choices available.
+
+These findings highlight the importance of making informed choices even within fast food options, as nutritional content can vary significantly both between and within categories.
+
+## References
+
+- Dataset: [Fast Food Nutrition on Kaggle](https://www.kaggle.com/datasets/roshansharma/fast-food-nutrition)
+- R Documentation: https://cran.r-project.org/
+- ggplot2 Reference: https://ggplot2.tidyverse.org/
+- Tidyverse Documentation: https://www.tidyverse.org/
+---
+
+## Quarto
+
+Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
+
+## Running Code
+
+When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
+
+```{r}
+1 + 1
+```
+
+You can add options to executable code like this
+
+```{r}
+#| echo: false
+2 * 2
+```
+
+The `echo: false` option disables the printing of code (only output is displayed).
